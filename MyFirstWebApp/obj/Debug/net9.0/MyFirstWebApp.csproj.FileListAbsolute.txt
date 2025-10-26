@@ -25,3 +25,4 @@ C:\Users\User\RiderProjects\WebApp\MyFirstWebApp\obj\Debug\net9.0\refint\MyFirst
 C:\Users\User\RiderProjects\WebApp\MyFirstWebApp\obj\Debug\net9.0\MyFirstWebApp.pdb
 C:\Users\User\RiderProjects\WebApp\MyFirstWebApp\obj\Debug\net9.0\MyFirstWebApp.genruntimeconfig.cache
 C:\Users\User\RiderProjects\WebApp\MyFirstWebApp\obj\Debug\net9.0\ref\MyFirstWebApp.dll
+C:\Users\User\RiderProjects\WebApp\MyFirstWebApp\obj\Debug\net9.0\MyFirstWebApp.sourcelink.json
