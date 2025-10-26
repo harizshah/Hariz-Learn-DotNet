@@ -198,9 +198,9 @@ static class EmployeesRepository
     // In-memory database (list of employees)
     private static List<Employee> employees = new List<Employee>
     {
-        new Employee(1, "John Doe", "Engineer", 60000),
-        new Employee(2, "Jane Smith", "Manager", 75000),
-        new Employee(3, "Sam Brown", "Technician", 50000)
+        new Employee(1, "Hariz Izzudin", "Engineer", 60000),
+        new Employee(2, "Azim Azmi", "Manager", 75000),
+        new Employee(3, "Nik Irfan", "Technician", 50000)
     };
 
     // Get all employees
