@@ -1,22 +1,22 @@
-using Microsoft.AspNetCore.DataProtection.KeyManagement; 
-// Imports a namespace (though not used here). Typically for managing encryption keys in ASP.NET Core.
+using Microsoft.AspNetCore.DataProtection.KeyManagement; // Namespace (not used here, but for managing encryption keys)
+using System.Text.Json; // Used to convert JSON text into C# objects and vice versa
 
-// Create a WebApplication builder — this sets up the app configuration and services
+// Create a web app builder (sets up configuration, services, etc.)
 var builder = WebApplication.CreateBuilder(args);
 
-// Build the WebApplication — creates the app instance to handle HTTP requests
+// Build the app (creates the request handling pipeline)
 var app = builder.Build();
 
-// Define what happens when a request comes to the server
+// Define the main request handler
 app.Run(async (HttpContext context) =>
 {
-    // Check if the incoming HTTP request is a GET request
+    // Handle GET requests
     if (context.Request.Method == "GET")
     {
-        // If the request path starts with "/" (the root)
+        // If the request path starts with "/" (root URL)
         if (context.Request.Path.StartsWithSegments("/"))
         {
-            // Write basic request info back to the browser
+            // Respond with method and URL
             await context.Response.WriteAsync($"The method is: {context.Request.Method}\r\n");
             await context.Response.WriteAsync($"The Url is: {context.Request.Path}\r\n");
 
@@ -27,31 +27,46 @@ app.Run(async (HttpContext context) =>
                 await context.Response.WriteAsync($"{key}: {context.Request.Headers[key]}\r\n");
             }
         }
-        // If the URL path starts with "/employees"
+        // If the request path is "/employees"
         else if (context.Request.Path.StartsWithSegments("/employees"))
         {
-            // Get the list of employees from the repository
+            // Get all employees from the repository
             var employees = EmployeesRepository.GetEmployees();
 
-            // Loop through the list and print each employee's name and position
-            foreach (var employee in employees) 
+            // Loop through employees and print name + position
+            foreach (var employee in employees)
             {
                 await context.Response.WriteAsync($"{employee.Name}: {employee.Position}\r\n");
             }
         }
     }
+    // Handle POST requests
+    else if (context.Request.Method == "POST")
+    {
+        // If the request path is "/employees"
+        if (context.Request.Path.StartsWithSegments("/employees"))
+        {
+            // Read the JSON body from the request
+            using var reader = new StreamReader(context.Request.Body);
+            var body = await reader.ReadToEndAsync();
+
+            // Convert JSON text into an Employee object
+            var employee = JsonSerializer.Deserialize<Employee>(body);
+
+            // Add the new employee to the list
+            EmployeesRepository.AddEmployee(employee);
+        }
+    }
 });
 
-// Start the app and listen for HTTP requests
+// Run the web application (start listening for requests)
 app.Run();
 
 
-// ---------------- Supporting classes below ----------------
-
-// Static class to store and provide employee data
+// ---------------- Repository Class ----------------
 static class EmployeesRepository
 {
-    // List of employees stored in memory
+    // Static list of employees in memory
     private static List<Employee> employees = new List<Employee>
     {
         new Employee(1, "John Doe", "Engineer", 60000),
@@ -59,20 +74,30 @@ static class EmployeesRepository
         new Employee(3, "Sam Brown", "Technician", 50000)
     };
 
-    // Public method to return the list of employees
+    // Returns all employees
     public static List<Employee> GetEmployees() => employees;
+
+    // Adds a new employee to the list (if not null)
+    public static void AddEmployee(Employee? employee)
+    {
+        if (employee is not null)
+        {
+            employees.Add(employee);
+        }
+    }
 }
 
-// Employee class represents each employee object
+
+// ---------------- Model Class ----------------
 public class Employee
 {
-    // Properties for employee details
+    // Properties of Employee
     public int Id { get; set; }
     public string Name { get; set; }
     public string Position { get; set; }
     public double Salary { get; set; }
 
-    // Constructor to initialize employee details
+    // Constructor to initialize a new Employee
     public Employee(int id, string name, string position, double salary)
     {
         Id = id;
