@@ -1,26 +1,27 @@
-using Microsoft.AspNetCore.DataProtection.KeyManagement; // (Unused here) — normally used for managing encryption keys
-using System.Text.Json; // Used for JSON serialization/deserialization (convert between text and C# objects)
+using Microsoft.AspNetCore.DataProtection.KeyManagement; // (Unused) — usually for encryption key management
+using Microsoft.AspNetCore.Http; // Gives access to HttpContext, Request, and Response
+using System.Text.Json; // For JSON serialization/deserialization (convert between JSON text and C# objects)
 
-// Create a new WebApplication builder (configures app & dependencies)
+// Create a new web app builder — sets up app configuration
 var builder = WebApplication.CreateBuilder(args);
 
-// Build the WebApplication instance
+// Build the web app — prepares it to handle requests
 var app = builder.Build();
 
-// Main middleware — handles every incoming HTTP request
+// Main middleware that handles all incoming HTTP requests
 app.Run(async (HttpContext context) =>
 {
     // =============== ROOT PATH "/" ===============
     if (context.Request.Path.StartsWithSegments("/"))
     {
-        // Return HTML response so browser displays formatted tags
+        // Set response to HTML
         context.Response.Headers["Content-Type"] = "text/html";
 
-        // Display request method and URL
+        // Show request method and URL
         await context.Response.WriteAsync($"The method is: {context.Request.Method}<br/>");
         await context.Response.WriteAsync($"The Url is: {context.Request.Path}<br/>");
 
-        // Display all headers as a bullet list
+        // List all headers
         await context.Response.WriteAsync($"<b>Headers</b>:<br/>");
         await context.Response.WriteAsync("<ul>");
         foreach (var key in context.Request.Headers.Keys)
@@ -30,26 +31,57 @@ app.Run(async (HttpContext context) =>
         await context.Response.WriteAsync("</ul>");
     }
 
-    // =============== EMPLOYEE ROUTES "/employees" ===============
+    // =============== EMPLOYEES ROUTE "/employees" ===============
     else if (context.Request.Path.StartsWithSegments("/employees"))
     {
-        // ---------- GET: Return all employees ----------
+        // ---------- GET ----------
         if (context.Request.Method == "GET")
         {
-            var employees = EmployeesRepository.GetEmployees();
-
-            context.Response.Headers["Content-Type"] = "text/html";
-            await context.Response.WriteAsync("<ul>");
-            foreach (var employee in employees)
+            // Check if query includes an ID (e.g. /employees?id=2)
+            if (context.Request.Query.ContainsKey("id"))
             {
-                await context.Response.WriteAsync($"<li><b>{employee.Name}</b>: {employee.Position}</li>");
-            }
-            await context.Response.WriteAsync("</ul>");
+                var id = context.Request.Query["id"];
 
-            context.Response.StatusCode = 200; // OK
+                // Convert id to integer
+                if (int.TryParse(id, out int employeeId))
+                {
+                    // Retrieve one specific employee by ID
+                    var employee = EmployeesRepository.GetEmployeeById(employeeId);
+
+                    context.Response.ContentType = "text/html";
+
+                    if (employee is not null)
+                    {
+                        // Show specific employee details
+                        await context.Response.WriteAsync($"Name: {employee.Name}<br/>");
+                        await context.Response.WriteAsync($"Position: {employee.Position}<br/>");
+                        await context.Response.WriteAsync($"Salary: {employee.Salary}<br/>");
+                    }
+                    else
+                    {
+                        // Employee not found
+                        context.Response.StatusCode = 404;
+                        await context.Response.WriteAsync("Employee not found.");
+                    }
+                }
+            }
+            else
+            {
+                // No ID → show all employees
+                var employees = EmployeesRepository.GetEmployees();
+
+                context.Response.Headers["Content-Type"] = "text/html";
+                await context.Response.WriteAsync("<ul>");
+                foreach (var employee in employees)
+                {
+                    await context.Response.WriteAsync($"<li><b>{employee.Name}</b>: {employee.Position}</li>");
+                }
+                await context.Response.WriteAsync("</ul>");
+                context.Response.StatusCode = 200; // OK
+            }
         }
 
-        // ---------- POST: Add new employee ----------
+        // ---------- POST ----------
         else if (context.Request.Method == "POST")
         {
             using var reader = new StreamReader(context.Request.Body);
@@ -57,17 +89,17 @@ app.Run(async (HttpContext context) =>
 
             try
             {
-                // Convert JSON body into Employee object
+                // Convert request body JSON to Employee object
                 var employee = JsonSerializer.Deserialize<Employee>(body);
 
-                // Validate input (ensure object not null and has valid Id)
+                // Validate employee data
                 if (employee is null || employee.Id <= 0)
                 {
                     context.Response.StatusCode = 400; // Bad Request
                     return;
                 }
 
-                // Add new employee to repository
+                // Add new employee
                 EmployeesRepository.AddEmployee(employee);
 
                 context.Response.StatusCode = 201; // Created
@@ -75,47 +107,47 @@ app.Run(async (HttpContext context) =>
             }
             catch (Exception ex)
             {
-                // Handle invalid JSON or deserialization errors
-                context.Response.StatusCode = 400; // Bad Request
+                // Handle invalid JSON
+                context.Response.StatusCode = 400;
                 await context.Response.WriteAsync(ex.ToString());
                 return;
             }
         }
 
-        // ---------- PUT: Update existing employee ----------
+        // ---------- PUT ----------
         else if (context.Request.Method == "PUT")
         {
             using var reader = new StreamReader(context.Request.Body);
             var body = await reader.ReadToEndAsync();
-            var employee = JsonSerializer.Deserialize<Employee>(body);
 
+            // Deserialize the updated employee info
+            var employee = JsonSerializer.Deserialize<Employee>(body);
             var result = EmployeesRepository.UpdateEmployee(employee);
 
             if (result)
             {
-                context.Response.StatusCode = 204; // No Content (success)
+                context.Response.StatusCode = 204; // No Content (update success)
                 await context.Response.WriteAsync("Employee updated successfully.");
                 return;
             }
             else
             {
-                context.Response.StatusCode = 404; // Not Found
+                // If no employee with the given ID
                 await context.Response.WriteAsync("Employee not found.");
             }
         }
 
-        // ---------- DELETE: Remove employee ----------
+        // ---------- DELETE ----------
         else if (context.Request.Method == "DELETE")
         {
-            // Check if query contains ?id= parameter
+            // Check for query ?id=
             if (context.Request.Query.ContainsKey("id"))
             {
                 var id = context.Request.Query["id"];
 
-                // Validate id number
                 if (int.TryParse(id, out int employeeId))
                 {
-                    // Basic authorization: requires header Authorization: frank
+                    // Simple authorization: must include header Authorization: frank
                     if (context.Request.Headers["Authorization"] == "frank")
                     {
                         var result = EmployeesRepository.DeleteEmployee(employeeId);
@@ -126,13 +158,14 @@ app.Run(async (HttpContext context) =>
                         }
                         else
                         {
-                            context.Response.StatusCode = 404; // Not Found
+                            context.Response.StatusCode = 404;
                             await context.Response.WriteAsync("Employee not found.");
                         }
                     }
                     else
                     {
-                        context.Response.StatusCode = 401; // Unauthorized
+                        // Unauthorized
+                        context.Response.StatusCode = 401;
                         await context.Response.WriteAsync("You are not authorized to delete.");
                     }
                 }
@@ -143,26 +176,26 @@ app.Run(async (HttpContext context) =>
     // =============== REDIRECTION ROUTE "/redirection" ===============
     else if (context.Request.Path.StartsWithSegments("/redirection"))
     {
-        // Redirects user to the /employees page
+        // Redirects user to /employees
         context.Response.Redirect("/employees");
     }
 
-    // =============== UNKNOWN PATHS ===============
+    // =============== DEFAULT: NOT FOUND ===============
     else
     {
-        // Return 404 Not Found for invalid routes
+        // For all other paths
         context.Response.StatusCode = 404;
     }
 });
 
-// Start the web app and begin handling HTTP requests
+// Start the web server
 app.Run();
 
 
-// ====================== REPOSITORY CLASS ======================
+// ==================== EMPLOYEE REPOSITORY ====================
 static class EmployeesRepository
 {
-    // In-memory list of employees (acts like a temporary database)
+    // In-memory database (list of employees)
     private static List<Employee> employees = new List<Employee>
     {
         new Employee(1, "John Doe", "Engineer", 60000),
@@ -170,10 +203,16 @@ static class EmployeesRepository
         new Employee(3, "Sam Brown", "Technician", 50000)
     };
 
-    // Return all employees
+    // Get all employees
     public static List<Employee> GetEmployees() => employees;
 
-    // Add a new employee
+    // Get one employee by ID
+    public static Employee? GetEmployeeById(int id)
+    {
+        return employees.FirstOrDefault(x => x.Id == id);
+    }
+
+    // Add new employee
     public static void AddEmployee(Employee? employee)
     {
         if (employee is not null)
@@ -182,7 +221,7 @@ static class EmployeesRepository
         }
     }
 
-    // Update existing employee data
+    // Update an existing employee
     public static bool UpdateEmployee(Employee? employee)
     {
         if (employee is not null)
@@ -199,7 +238,7 @@ static class EmployeesRepository
         return false;
     }
 
-    // Delete employee by Id
+    // Delete employee by ID
     public static bool DeleteEmployee(int id)
     {
         var employee = employees.FirstOrDefault(x => x.Id == id);
@@ -213,16 +252,16 @@ static class EmployeesRepository
 }
 
 
-// ====================== EMPLOYEE MODEL ======================
+// ==================== EMPLOYEE CLASS (MODEL) ====================
 public class Employee
 {
-    // Properties representing employee data
+    // Properties (columns)
     public int Id { get; set; }
     public string Name { get; set; }
     public string Position { get; set; }
     public double Salary { get; set; }
 
-    // Constructor for initialization
+    // Constructor to initialize Employee data
     public Employee(int id, string name, string position, double salary)
     {
         Id = id;
