@@ -1,122 +1,106 @@
-using Microsoft.AspNetCore.DataProtection.KeyManagement; // (Unused) normally used for key encryption management
-using System.Text.Json; // For converting JSON text to and from C# objects
+using Microsoft.AspNetCore.DataProtection.KeyManagement; // (Unused here) — usually for key management & encryption
+using System.Text.Json; // Used to convert JSON text to/from C# objects
 
-// Create a new web application builder (sets up config & services)
+// Create a WebApplication builder — sets up configuration & dependencies
 var builder = WebApplication.CreateBuilder(args);
 
-// Build the app (ready to handle HTTP requests)
+// Build the app (finalizes configuration and prepares the HTTP pipeline)
 var app = builder.Build();
 
-// Handle all incoming HTTP requests here
+// Main request handler — runs whenever an HTTP request hits the server
 app.Run(async (HttpContext context) =>
 {
-    // ========== GET REQUEST ==========
-    if (context.Request.Method == "GET")
+    // ----------- ROOT PATH "/" -----------
+    if (context.Request.Path.StartsWithSegments("/"))
     {
-        // If path is root "/"
-        if (context.Request.Path.StartsWithSegments("/"))
-        {
-            // Print request info
-            await context.Response.WriteAsync($"The method is: {context.Request.Method}\r\n");
-            await context.Response.WriteAsync($"The Url is: {context.Request.Path}\r\n");
+        // Print basic request info (method and URL)
+        await context.Response.WriteAsync($"The method is: {context.Request.Method}\r\n");
+        await context.Response.WriteAsync($"The Url is: {context.Request.Path}\r\n");
 
-            // Print all HTTP headers
-            await context.Response.WriteAsync($"\r\nHeaders:\r\n");
-            foreach (var key in context.Request.Headers.Keys)
-            {
-                await context.Response.WriteAsync($"{key}: {context.Request.Headers[key]}\r\n");
-            }
-        }
-        // If path starts with "/employees"
-        else if (context.Request.Path.StartsWithSegments("/employees"))
+        // Print all request headers
+        await context.Response.WriteAsync($"\r\nHeaders:\r\n");
+        foreach (var key in context.Request.Headers.Keys)
         {
-            // Get all employees from repository
+            await context.Response.WriteAsync($"{key}: {context.Request.Headers[key]}\r\n");
+        }
+    }
+
+    // ----------- EMPLOYEES ROUTE "/employees" -----------
+    else if (context.Request.Path.StartsWithSegments("/employees"))
+    {
+        // ===== GET /employees =====
+        if (context.Request.Method == "GET")
+        {
+            // Retrieve all employees from repository
             var employees = EmployeesRepository.GetEmployees();
 
-            // Print name & position of each employee
+            // Display each employee's name and position
             foreach (var employee in employees)
             {
                 await context.Response.WriteAsync($"{employee.Name}: {employee.Position}\r\n");
             }
         }
-    }
 
-    // ========== POST REQUEST ==========
-    else if (context.Request.Method == "POST")
-    {
-        if (context.Request.Path.StartsWithSegments("/employees"))
+        // ===== POST /employees =====
+        else if (context.Request.Method == "POST")
         {
-            // Read the body as text (JSON data)
+            // Read request body (contains JSON data for new employee)
             using var reader = new StreamReader(context.Request.Body);
             var body = await reader.ReadToEndAsync();
 
-            // Convert JSON text to Employee object
+            // Deserialize JSON into an Employee object
             var employee = JsonSerializer.Deserialize<Employee>(body);
 
-            // Add new employee to in-memory list
+            // Add the new employee to in-memory list
             EmployeesRepository.AddEmployee(employee);
         }
-    }
 
-    // ========== PUT REQUEST ==========
-    else if (context.Request.Method == "PUT")
-    {
-        if (context.Request.Path.StartsWithSegments("/employees"))
+        // ===== PUT /employees =====
+        else if (context.Request.Method == "PUT")
         {
-            // Read body as JSON text
+            // Read body containing updated employee data
             using var reader = new StreamReader(context.Request.Body);
             var body = await reader.ReadToEndAsync();
 
-            // Convert JSON to Employee object
+            // Deserialize JSON into Employee object
             var employee = JsonSerializer.Deserialize<Employee>(body);
 
-            // Update employee record
+            // Try updating employee info
             var result = EmployeesRepository.UpdateEmployee(employee);
 
-            // Send response back
+            // Return response message
             if (result)
-            {
                 await context.Response.WriteAsync("Employee updated successfully.");
-            }
             else
-            {
                 await context.Response.WriteAsync("Employee not found.");
-            }
         }
-    }
 
-    // ========== DELETE REQUEST ==========
-    else if (context.Request.Method == "DELETE")
-    {
-        if (context.Request.Path.StartsWithSegments("/employees"))
+        // ===== DELETE /employees?id=1 =====
+        else if (context.Request.Method == "DELETE")
         {
-            // Check if the request contains a query parameter "id"
+            // Check if query contains an "id" parameter
             if (context.Request.Query.ContainsKey("id"))
             {
                 var id = context.Request.Query["id"];
 
-                // Try to convert id from string to int
+                // Convert "id" from string to integer
                 if (int.TryParse(id, out int employeeId))
                 {
-                    // Check Authorization header
+                    // Basic authorization check — must send header Authorization: frank
                     if (context.Request.Headers["Authorization"] == "frank")
                     {
-                        // Try deleting employee
+                        // Attempt to delete the employee
                         var result = EmployeesRepository.DeleteEmployee(employeeId);
 
-                        // Respond based on result
+                        // Respond accordingly
                         if (result)
-                        {
                             await context.Response.WriteAsync("Employee is deleted successfully.");
-                        }
                         else
-                        {
                             await context.Response.WriteAsync("Employee not found.");
-                        }
                     }
                     else
                     {
-                        // If Authorization header is wrong or missing
+                        // If Authorization header missing or incorrect
                         await context.Response.WriteAsync("You are not authorized to delete.");
                     }
                 }
@@ -125,14 +109,14 @@ app.Run(async (HttpContext context) =>
     }
 });
 
-// Run the web server (starts listening on localhost)
+// Start the web server (begins listening for HTTP requests)
 app.Run();
 
 
-// ================== EMPLOYEE REPOSITORY ==================
+// ======================= EMPLOYEE REPOSITORY =======================
 static class EmployeesRepository
 {
-    // In-memory list of employees
+    // In-memory list of employees (mock database)
     private static List<Employee> employees = new List<Employee>
     {
         new Employee(1, "John Doe", "Engineer", 60000),
@@ -143,16 +127,14 @@ static class EmployeesRepository
     // Return all employees
     public static List<Employee> GetEmployees() => employees;
 
-    // Add new employee to list
+    // Add a new employee to the list
     public static void AddEmployee(Employee? employee)
     {
         if (employee is not null)
-        {
             employees.Add(employee);
-        }
     }
 
-    // Update an existing employee
+    // Update an existing employee (matched by Id)
     public static bool UpdateEmployee(Employee? employee)
     {
         if (employee is not null)
@@ -163,27 +145,27 @@ static class EmployeesRepository
                 emp.Name = employee.Name;
                 emp.Position = employee.Position;
                 emp.Salary = employee.Salary;
-                return true;
+                return true; // Update successful
             }
         }
-        return false;
+        return false; // Employee not found
     }
 
-    // Delete employee by Id
+    // Delete an employee (matched by Id)
     public static bool DeleteEmployee(int id)
     {
         var employee = employees.FirstOrDefault(x => x.Id == id);
         if (employee is not null)
         {
             employees.Remove(employee);
-            return true;
+            return true; // Deletion successful
         }
-        return false;
+        return false; // Employee not found
     }
 }
 
 
-// ================== EMPLOYEE MODEL ==================
+// ======================= EMPLOYEE MODEL =======================
 public class Employee
 {
     // Employee properties
@@ -192,7 +174,7 @@ public class Employee
     public string Position { get; set; }
     public double Salary { get; set; }
 
-    // Constructor to initialize new Employee
+    // Constructor to initialize Employee object
     public Employee(int id, string name, string position, double salary)
     {
         Id = id;
